@@ -21,8 +21,7 @@ def run_keras_tuner():
     def wrapped_model_builder(hp):
         optimizer = hp.Choice("optimizer", ["adam", "adagrad", "nadam"])
         learning_rate = hp.Choice("learning_rate", [0.1, 0.01, 0.001])
-        # 🔧 Now declared here too
-        hp.Choice("batch_size", [4, 8, 16])  
+        batch_size = hp.Choice("batch_size", [4, 8, 16])  # ✅ added here
 
         model, _ = build_model(
             layers=[200],
@@ -52,15 +51,15 @@ def run_keras_tuner():
     for param in best_hps.values:
         print(f"{param}: {best_hps.get(param)}")
 
-    # If batch_size wasn’t chosen, default it manually
     best_params = {
         "layers": [200],
         "time_steps": input_shape[0],
         "learning_rate": best_hps.get("learning_rate"),
         "optimizer": best_hps.get("optimizer"),
         "dropout_rate": 0.2,
-        "batch_size": best_hps.values.get("batch_size", 32),
-        "epochs": 20
+        "batch_size": best_hps.values.get("batch_size", 32),  # fallback if somehow missing
+        "epochs": 20,
+        "replicates": 10
     }
 
     run_test(best_params)
