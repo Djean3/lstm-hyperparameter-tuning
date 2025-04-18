@@ -13,7 +13,8 @@ SCALER_SAVE_PATH = "data/processed/minmax_scaler.pkl"
 def haar_denoise(series, wavelet='haar', level=2):
     coeffs = pywt.wavedec(series, wavelet, mode="per")
     coeffs[1:] = [np.zeros_like(c) for c in coeffs[1:]]
-    return pywt.waverec(coeffs, wavelet, mode="per")
+    reconstructed = pywt.waverec(coeffs, wavelet, mode='per')
+    return reconstructed[:len(series)]
 
 
 def preprocess():
