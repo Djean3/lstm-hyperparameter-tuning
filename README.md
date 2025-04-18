@@ -1,17 +1,52 @@
-📁 data/ ├── raw/ # Original raw CSV input data ├── processed/ # Preprocessed split data and scaler for reuse │ ├── processed_data.npz # Contains train/val/test arrays │ └── scaler.save # Saved MinMaxScaler object
+## 📁 Project Directory Overview
 
-📁 notebooks/ ├── exploration.ipynb # Initial exploration of the dataset ├── LSTM-SDM_Code_Implementation.ipynb # Draft implementation from the paper ├── tuning_results.ipynb # Placeholder for results summary
+### 📂 data/
+- **raw/** — Original input CSV file.
+- **processed/** — Contains:
+  - `processed_data.npz`: Saved train/val/test splits.
+  - `scaler.save`: Fitted `MinMaxScaler` for inverse transformations.
 
-📁 outputs/ ├── keras_tuner/lstm_tuning/ # Keras Tuner Hyperband trial logs ├── models/ # Trained model artifacts (future use) ├── graphs/ # Plots and metrics (planned) ├── mlruns/ # (MLflow logs coming soon)
+### 📂 notebooks/
+- `exploration.ipynb` — Initial dataset exploration.
+- `LSTM-SDM_Code_Implementation.ipynb` — Draft implementation based on the paper.
+- `tuning_results.ipynb` — Placeholder to visualize or summarize tuning outcomes.
 
-📁 src/ ├── config/ # (Optional future config files) │ ├── data/ │ ├── load_data.py # Loads and returns preprocessed data splits │ └── preprocessing.py # Prepares the raw CSV for modeling and saves outputs │ ├── lstm_hyperparameter_tuning/ │ └── init.py # Namespace
+### 📂 outputs/
+- **keras_tuner/lstm_tuning/** — Saved trials and metadata from Keras Tuner.
+- **models/** — Directory for storing trained model artifacts.
+- **graphs/** — Plots and evaluation visuals (future use).
+- **mlruns/** — MLflow logs (to be added).
 
-├── models/ │ ├── base_lstm.py # Core LSTM model builder │ ├── evaluate_hparams.py # Runs model training/evaluation with replicates │ ├── train_test_run.py # Manual run script (pre-Keras tuner) │ └── train.py # (Future training script)
+### 📂 src/
+#### 📁 config/
+- (Optional) For configuration files like `settings.py`, etc.
 
-├── tuning/ │ ├── keras_tuner_runner.py # Runs Keras Tuner (Hyperband) search + evaluation │ ├── optuna_runner.py # Setup for Optuna (pending) │ ├── hyperopt_runner.py # Setup for Hyperopt (pending) │ ├── grid_search_runner.py # Setup for basic grid search (pending) │ └── results_logger.py # (Planned) Results tracking and saving
+#### 📁 data/
+- `preprocessing.py` — Converts raw CSV into model-ready format, saves outputs.
+- `load_data.py` — Loads processed data and scaler into memory.
 
-├── utils/ │ ├── callbacks.py # Early stopping and other callback logic │ ├── metrics.py # Custom metrics like MAPE │ └── logging.py # Placeholder for MLflow logging (in progress)
+#### 📁 models/
+- `base_lstm.py` — Core LSTM model definition and compile logic.
+- `evaluate_hparams.py` — Evaluates models using a fixed train/test split and multiple replicates.
+- `train_test_run.py` — Standalone training/testing script (useful for debugging).
+- `train.py` — (Planned) A generic training entry point.
 
-📁 tests/ └── (Placeholder for unit tests)
+#### 📁 tuning/
+- `keras_tuner_runner.py` — Runs Keras Tuner using Hyperband.
+- `optuna_runner.py` — Placeholder for Optuna integration.
+- `hyperopt_runner.py` — Placeholder for Hyperopt integration.
+- `grid_search_runner.py` — Placeholder for manual/grid-based tuning.
+- `results_logger.py` — Planned utility for saving and comparing results.
 
-📄 run.py # Optional CLI runner 📄 pyproject.toml # Poetry dependency management 📄 README.md # Project documentation
+#### 📁 utils/
+- `callbacks.py` — Early stopping and other Keras callback utilities.
+- `metrics.py` — Custom metrics (e.g., MAPE).
+- `logging.py` — MLflow logging integration (in progress).
+
+### 📂 tests/
+- (Placeholder for unit tests)
+
+### 📄 Root Files
+- `run.py` — Optional CLI runner script.
+- `pyproject.toml` — Poetry environment and dependency manager.
+- `README.md` — This file!
