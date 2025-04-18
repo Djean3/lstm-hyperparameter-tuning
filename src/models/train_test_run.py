@@ -1,6 +1,28 @@
-from src.data.load_data import load_preprocessed_data
-from src.models.build_model import build_model
+# =================== #
+# 📦 Environment Setup
+# =================== #
+import os
+import warnings
+
+# Suppress TensorFlow logs and OneDNN factory warnings
+os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'              # Disable INFO & WARNING logs
+os.environ['TF_ENABLE_ONEDNN_OPTS'] = '0'             # Disable oneDNN-related precision logs
+os.environ['TF_FORCE_GPU_ALLOW_GROWTH'] = 'true'      # Prevent TF from allocating all GPU memory
+
+warnings.filterwarnings('ignore')                     # Suppress standard Python warnings
+
+# Optional: suppress absl logging
+import absl.logging
+absl.logging.set_verbosity(absl.logging.ERROR)
+
+# =================== #
+# 📦 Project Imports
+# =================== #
+from data.load_data import load_preprocessed_data
+from models.base_lstm import build_model
 import tensorflow as tf
+
+
 
 # Load data and scaler
 X_train, y_train, X_val, y_val, X_test, y_test, scaler = load_preprocessed_data(include_scaler=True)
