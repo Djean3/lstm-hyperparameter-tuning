@@ -4,7 +4,6 @@ version = "0.1.0"
 description = "LSTM model with multiple hyperparameter tuning strategies"
 authors = ["David Jean <davidejeaniii@gmail.com>"]
 readme = "README.md"
-packages = [{ include = "src" }]
 
 [tool.poetry.dependencies]
 python = "^3.11"
@@ -23,10 +22,8 @@ hyperopt = "^0.2.7"
 ipywidgets = "^8.1.6"
 pywavelets = "^1.8.0"
 keras-tuner = "^1.4.7"
-configspace = "^0.6.0"
-
-# Pin a known working version of SMAC3 from GitHub
-smac = { git = "https://github.com/automl/SMAC3.git", rev = "v2.0.0-beta.4" }
+smac = { git = "https://github.com/automl/SMAC3.git", branch = "main", extras = ["all"] }
+configspace = ">=1.0.0"
 
 [[tool.poetry.source]]
 name = "nvidia"
@@ -34,5 +31,6 @@ url = "https://pypi.ngc.nvidia.com"
 priority = "explicit"
 
 [build-system]
-requires = ["poetry-core"]
+requires = ["poetry-core>=1.0.0"]
 build-backend = "poetry.core.masonry.api"
+
