@@ -7,6 +7,11 @@ from ConfigSpace import ConfigurationSpace, Categorical, Float, Integer
 from data.load_data import load_preprocessed_data
 from models.base_lstm import build_model
 from models.evaluate_hparams import run_test
+#from smac.runhistory.runhistory import RunInfo, RunValue
+#from smac.runhistory.status_type import StatusType
+from tqdm import tqdm
+import time
+#start_time = time()
 
 # Silence logs
 os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'
@@ -64,7 +69,9 @@ def run_smac_tuner():
         target_function=build_lstm_from_config,
         initial_design=initial_design
     )
-
+ #######################################
+    # BUILD PROGRESS BAR
+##########################################
     incumbent = smac.optimize()
     print("\n🎯 Best Hyperparameters Found:")
     for k, v in incumbent.items():
