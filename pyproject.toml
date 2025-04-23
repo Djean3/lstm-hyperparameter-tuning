@@ -22,7 +22,8 @@ hyperopt = "^0.2.7"
 ipywidgets = "^8.1.6"
 pywavelets = "^1.8.0"
 keras-tuner = "^1.4.7"
-smac = {extras = ["all"], version = "^2.3.1"}
+smac = "^1.5.0"  # ✅ SMAC3 is published as v1.x!
+configspace = "^0.6.0"
 
 [[tool.poetry.source]]
 name = "nvidia"
