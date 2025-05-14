@@ -1,7 +1,7 @@
 # src/tuning/keras_tuner_runner.py
 import os
 import warnings
-import keras_tuner_runner as kt
+import keras_tuner as kt
 import tensorflow as tf
 from models.base_lstm import build_model
 from data.load_data import load_preprocessed_data
@@ -15,7 +15,7 @@ import os
 from utils.logging import STANDARD_LOG_HEADERS
 
 def clear_keras_logs():
-    log_dir = "outputs/keras_tuner/lstm_tuning"
+    log_dir = "outputs/keras_tuner/"
     if os.path.exists(log_dir):
         shutil.rmtree(log_dir)
         print(f"✅ Removed all previous logs from: {log_dir}")
@@ -60,7 +60,7 @@ def run_keras_tuner():
         project_name='lstm_tuning'
     )
 
-    tuner.search(X_train, y_train, validation_data=(X_val, y_val), epochs=10)
+    tuner.search(X_train, y_train, validation_data=(X_val, y_val), epochs=3)    #######CHANGE THIS BACK TO 10
 
     best_hps = tuner.get_best_hyperparameters(1)[0]
 
@@ -69,19 +69,24 @@ def run_keras_tuner():
         print(f"{param}: {best_hps.get(param)}")
 
     best_params = {
-        "layers": [200],
+        "layers": str(best_params["layers"]),
         "time_steps": input_shape[0],
         "learning_rate": best_hps.get("learning_rate"),
         "optimizer": best_hps.get("optimizer"),
         "dropout_rate": 0.2,
         "batch_size": best_hps.get("batch_size"),
-        "epochs": 20,
-        "replicates": 10
+        "epochs": 5, ###########CHANGED THIS TO 5 NEED TO CHANGE IT BACK TO 20
+        "replicates": 3  #########CHANGE THIS BACK TO 10
     }
 
     log_filename = get_log_filename("kerasbo", "base_lstm")
     init_csv_logger(log_filename, STANDARD_LOG_HEADERS)
     param_set_id = generate_param_hash(best_params)
+
+    hp_string = f"learning_rate={best_params['learning_rate']}, " \
+            f"batch_size={best_params['batch_size']}, " \
+            f"dropout_rate={best_params['dropout_rate']}, " \
+            f"layers={best_params['layers']}"
 
     for replicate in range(best_params["replicates"]):
         model, _ = build_model(
@@ -95,31 +100,48 @@ def run_keras_tuner():
         )
 
         model.compile(optimizer=model.optimizer, loss="mean_squared_error", metrics=["mae"])
+        import time
+        start_time = time.time()
+
         history = model.fit(
             X_train, y_train,
             validation_data=(X_val, y_val),
             batch_size=best_params["batch_size"],
             epochs=best_params["epochs"],
+            callbacks=[],  # add early_stopping_cb here if using it
             verbose=0
         )
 
-        for epoch, (train_loss, val_loss) in enumerate(zip(history.history["loss"], history.history["val_loss"])):
-            y_pred_train = model.predict(X_train, verbose=0).flatten()
-            y_pred_val = model.predict(X_val, verbose=0).flatten()
-            y_pred_test = model.predict(X_test, verbose=0).flatten()
+        # Track runtime
+        runtime = time.time() - start_time
 
+        # Track early stopping
+        epochs_run = len(history.history["loss"])
+        early_stopped = epochs_run < best_params["epochs"]
+
+        # Predictions
+        y_pred_train = model.predict(X_train, verbose=0).flatten()
+        y_pred_val = model.predict(X_val, verbose=0).flatten()
+        y_pred_test = model.predict(X_test, verbose=0).flatten()
+
+        # Test loss
+        mse = tf.keras.losses.MeanSquaredError()
+        test_loss = mse(y_test, y_pred_test).numpy()
+
+        # Now log the final epoch
+        for epoch, (train_loss, val_loss) in enumerate(zip(history.history["loss"], history.history["val_loss"])):
             train_metrics = compute_metrics(y_train, y_pred_train)
             val_metrics = compute_metrics(y_val, y_pred_val)
             test_metrics = compute_metrics(y_test, y_pred_test)
 
             log_epoch(log_filename, {
-                "trial_id": 0,
+                "trial_id": replicate,
                 "replicate": replicate,
                 "epoch": epoch,
-                "final_epoch_flag": int(epoch == best_params["epochs"] - 1),
+                "final_epoch_flag": int(epoch == epochs_run - 1),
                 "train_loss": train_loss,
                 "val_loss": val_loss,
-                "test_loss": 0.0,
+                "test_loss": test_loss,
                 "train_mae": train_metrics["mae"],
                 "val_mae": val_metrics["mae"],
                 "test_mae": test_metrics["mae"],
@@ -136,8 +158,9 @@ def run_keras_tuner():
                 "learning_rate": best_params["learning_rate"],
                 "batch_size": best_params["batch_size"],
                 "param_set_id": param_set_id,
-                "early_stopped": False,
-                "runtime_seconds": 0.0
+                "early_stopped": early_stopped,
+                "runtime_seconds": runtime,
+                "hyperparameters": hp_string
             })
 
     run_test(best_params)
