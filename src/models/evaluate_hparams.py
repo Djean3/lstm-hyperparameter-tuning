@@ -5,7 +5,11 @@ import tensorflow as tf
 from sklearn.metrics import mean_squared_error, mean_absolute_error, r2_score
 from data.load_data import load_preprocessed_data
 from models.base_lstm import build_model
-from utils.metrics import mean_absolute_percentage_error
+from utils.compute_metrics import compute_metrics
+
+from utils.compute_metrics import mean_absolute_percentage_error
+
+
 from statistics import mean
 
 def run_test(hparams: dict, use_scaler=True, verbose=1):

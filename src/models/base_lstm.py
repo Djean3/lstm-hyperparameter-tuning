@@ -25,7 +25,15 @@ def build_model(layers, time_steps, num_features, optimizer_name="adam", learnin
     else:
         raise ValueError(f"Unsupported optimizer: {optimizer_name}")
 
-    model.compile(optimizer=optimizer, loss='mean_squared_error', metrics=['mae'])
+    model.compile(
+    optimizer=optimizer,
+    loss='mean_squared_error',
+    metrics=[
+        'mae',
+        tf.keras.metrics.RootMeanSquaredError(name='rmse'),
+        tf.keras.metrics.MeanAbsolutePercentageError(name='mape')
+    ]
+)
 
     # Add early stopping callback (optional to use during training)
     early_stopping = tf.keras.callbacks.EarlyStopping(

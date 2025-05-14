@@ -27,7 +27,7 @@ STANDARD_LOG_HEADERS = [
     "train_r2", "val_r2", "test_r2",
     "train_mape", "val_mape", "test_mape",
     "optimizer", "learning_rate", "batch_size", "dropout_rate", "layers",
-    "param_set_id", "early_stopped", "runtime_seconds", "hyeperparameters"
+    "param_set_id", "early_stopped", "runtime_seconds" #"hyeperparameters"
 ]
 
 

@@ -6,13 +6,21 @@ import tensorflow as tf
 from models.base_lstm import build_model
 from data.load_data import load_preprocessed_data
 from models.evaluate_hparams import run_test
-from utils.logging import get_log_filename, init_csv_logger, log_epoch, compute_metrics, generate_param_hash, summarize_log
+from utils.hps_logger import init_hps_log, log_hps_epoch
+from utils.model_runs_logger import init_model_log, log_model_epoch
+from utils.summary_logger import summarize_model_runs
+from utils.model_runs_logger import MODEL_RUN_HEADERS
+from utils.hps_logger import HPS_LOG_HEADERS
+from utils.hps_logger import HPSLoggerCallback
+from utils.common import generate_param_hash
 import numpy as np
 from datetime import datetime
 import absl.logging
 import shutil
-import os
-from utils.logging import STANDARD_LOG_HEADERS
+import time
+from utils.compute_metrics import compute_metrics
+
+from utils.compute_metrics import compute_metrics
 
 def clear_keras_logs():
     log_dir = "outputs/keras_tuner/"
@@ -22,10 +30,8 @@ def clear_keras_logs():
     else:
         print(f"⚠️ Path not found: {log_dir}")
 
-# Call before running tuner
 clear_keras_logs()
 
-# Suppress TF & absl logs
 os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'
 warnings.filterwarnings("ignore")
 tf.get_logger().setLevel("ERROR")
@@ -37,19 +43,24 @@ def run_keras_tuner():
 
     def wrapped_model_builder(hp):
         optimizer = hp.Choice("optimizer", ["adam", "adagrad", "nadam"])
-        learning_rate = hp.Choice("learning_rate", [0.1, 0.01, 0.001])
-        batch_size = hp.Choice("batch_size", [4, 8, 16])
+        learning_rate = hp.Choice("learning_rate", [0.01, 0.001, 0.0001])
+        batch_size = hp.Choice("batch_size", [4, 8, 16, ])
+        dropout_rate = hp.Choice("dropout_rate", [0.1, 0.2, 0.3])
+        num_layers = hp.Int("num_layers", 1, 3)
+        layer_size = hp.Choice("layer_size", [64, 128, 200])
+
+        layers = [layer_size] * num_layers
 
         model, _ = build_model(
-            layers=[200],
+            layers=layers,
             time_steps=input_shape[0],
             num_features=input_shape[1],
             optimizer_name=optimizer,
             learning_rate=learning_rate,
-            dropout_rate=0.2,
+            dropout_rate=dropout_rate,
             use_early_stopping=False
         )
-        model.compile(optimizer=model.optimizer, loss="mean_squared_error", metrics=["mae"])
+
         return model
 
     tuner = kt.BayesianOptimization(
@@ -60,33 +71,50 @@ def run_keras_tuner():
         project_name='lstm_tuning'
     )
 
-    tuner.search(X_train, y_train, validation_data=(X_val, y_val), epochs=3)    #######CHANGE THIS BACK TO 10
+    trial_id = f"trial_{int(time.time())}"
+    log_file = f"outputs/keras_tuner/{trial_id}.csv"
+    init_hps_log(log_file)
+
+    hpo_callback = HPSLoggerCallback(
+        filename=log_file,
+        trial_id=trial_id,
+        replicate=0,
+        param_dict={},  # optional: can fill this from `hp` if you want
+        X_test=X_test,
+        y_test=y_test
+    )
+
+    tuner.search(
+    X_train, y_train,
+    validation_data=(X_val, y_val),
+    epochs=10,
+    callbacks=[hpo_callback]
+)
 
     best_hps = tuner.get_best_hyperparameters(1)[0]
 
-    print("\n🎯 Best Hyperparameters Found:")
-    for param in best_hps.values:
-        print(f"{param}: {best_hps.get(param)}")
-
     best_params = {
-        "layers": str(best_params["layers"]),
+        "layers": [best_hps.get("layer_size")] * best_hps.get("num_layers"),
         "time_steps": input_shape[0],
         "learning_rate": best_hps.get("learning_rate"),
         "optimizer": best_hps.get("optimizer"),
-        "dropout_rate": 0.2,
+        "dropout_rate": best_hps.get("dropout_rate"),
         "batch_size": best_hps.get("batch_size"),
-        "epochs": 5, ###########CHANGED THIS TO 5 NEED TO CHANGE IT BACK TO 20
-        "replicates": 3  #########CHANGE THIS BACK TO 10
+        "epochs": 20,
+        "replicates": 10
     }
 
-    log_filename = get_log_filename("kerasbo", "base_lstm")
-    init_csv_logger(log_filename, STANDARD_LOG_HEADERS)
-    param_set_id = generate_param_hash(best_params)
+    print("Best parameters:", best_params)
 
-    hp_string = f"learning_rate={best_params['learning_rate']}, " \
-            f"batch_size={best_params['batch_size']}, " \
-            f"dropout_rate={best_params['dropout_rate']}, " \
-            f"layers={best_params['layers']}"
+    timestamp = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
+    log_filename = f"logs/kerasbo_base_lstm_hpo_{timestamp}.csv"
+    model_log_filename = f"logs/kerasbo_base_lstm_model_runs_{timestamp}.csv"
+    model_summary_filename = f"logs/kerasbo_base_lstm_model_runs_{timestamp}_summary.csv"
+
+    init_hps_log(log_filename)
+    init_model_log(model_log_filename)
+
+    param_set_id = generate_param_hash(best_params)
 
     for replicate in range(best_params["replicates"]):
         model, _ = build_model(
@@ -100,7 +128,13 @@ def run_keras_tuner():
         )
 
         model.compile(optimizer=model.optimizer, loss="mean_squared_error", metrics=["mae"])
-        import time
+        lr_callback = tf.keras.callbacks.ReduceLROnPlateau(
+            monitor='val_loss',
+            factor=0.5,
+            patience=3,
+            min_lr=1e-6,
+            verbose=0
+        )
         start_time = time.time()
 
         history = model.fit(
@@ -108,33 +142,34 @@ def run_keras_tuner():
             validation_data=(X_val, y_val),
             batch_size=best_params["batch_size"],
             epochs=best_params["epochs"],
-            callbacks=[],  # add early_stopping_cb here if using it
+            callbacks=[lr_callback],
             verbose=0
         )
 
-        # Track runtime
         runtime = time.time() - start_time
-
-        # Track early stopping
         epochs_run = len(history.history["loss"])
         early_stopped = epochs_run < best_params["epochs"]
 
-        # Predictions
         y_pred_train = model.predict(X_train, verbose=0).flatten()
         y_pred_val = model.predict(X_val, verbose=0).flatten()
         y_pred_test = model.predict(X_test, verbose=0).flatten()
 
-        # Test loss
+        # Fix is here:
+        from tensorflow.keras.losses import MeanSquaredError
         mse = tf.keras.losses.MeanSquaredError()
         test_loss = mse(y_test, y_pred_test).numpy()
 
-        # Now log the final epoch
+
+        
+
         for epoch, (train_loss, val_loss) in enumerate(zip(history.history["loss"], history.history["val_loss"])):
             train_metrics = compute_metrics(y_train, y_pred_train)
             val_metrics = compute_metrics(y_val, y_pred_val)
             test_metrics = compute_metrics(y_test, y_pred_test)
 
-            log_epoch(log_filename, {
+            dynamic_learning_rate = float(tf.keras.backend.get_value(model.optimizer.learning_rate))
+
+            row = {
                 "trial_id": replicate,
                 "replicate": replicate,
                 "epoch": epoch,
@@ -156,23 +191,25 @@ def run_keras_tuner():
                 "test_mape": test_metrics["mape"],
                 "optimizer": best_params["optimizer"],
                 "learning_rate": best_params["learning_rate"],
+                "dynamic_learning_rate": dynamic_learning_rate,
                 "batch_size": best_params["batch_size"],
+                "dropout_rate": best_params["dropout_rate"],
+                "layers": best_params["layers"],
                 "param_set_id": param_set_id,
                 "early_stopped": early_stopped,
                 "runtime_seconds": runtime,
-                "hyperparameters": hp_string
-            })
+                "hyperparameters": f"optimizer={best_params['optimizer']}, learning_rate={best_params['learning_rate']}, batch_size={best_params['batch_size']}, dropout_rate={best_params['dropout_rate']}, layers={best_params['layers']}",
+
+            }
+
+            log_hps_epoch(log_filename, row)
+            log_model_epoch(model_log_filename, row)
 
     run_test(best_params)
-
-    # Print summary of results from the CSV log
-    summary = summarize_log(log_filename)
+    summary = summarize_model_runs(model_log_filename, model_summary_filename)
     print("\n📊 Averaged Evaluation Metrics Across Replicates:")
     for k, v in summary.items():
-        if isinstance(v, float):
-            print(f"{k}: {v:.4f}")
-        else:
-            print(f"{k}: {v}")
+        print(f"{k}: {v:.4f}" if isinstance(v, float) else f"{k}: {v}")
 
 if __name__ == "__main__":
     run_keras_tuner()
