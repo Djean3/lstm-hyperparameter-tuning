@@ -1,7 +1,7 @@
 # src/tuning/keras_tuner_runner.py
 import os
 import warnings
-import keras_tuner as kt
+import keras_tuner_runner as kt
 import tensorflow as tf
 from models.base_lstm import build_model
 from data.load_data import load_preprocessed_data
