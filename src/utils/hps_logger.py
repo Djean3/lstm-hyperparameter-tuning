@@ -50,7 +50,11 @@ class HPSLoggerCallback(Callback):
         final_epoch = int(epoch == self.params['epochs'] - 1)
         runtime = time.time() - self.start_time
 
-        test_loss, test_mae = self.model.evaluate(self.X_test, self.y_test, verbose=0)
+        results = self.model.evaluate(self.X_test, self.y_test, verbose=0)
+        test_loss = results[0]
+        test_mae = results[1]
+        test_rmse = results[2] if len(results) > 2 else None
+        test_mape = results[3] if len(results) > 3 else None
         y_pred = self.model.predict(self.X_test, verbose=0)
         y_true = self.y_test
 
@@ -72,13 +76,13 @@ class HPSLoggerCallback(Callback):
             "test_mae": test_mae,
             "train_rmse": None,
             "val_rmse": None,
-            "test_rmse": rmse,
+            "test_rmse": test_rmse,
             "train_r2": None,
             "val_r2": None,
             "test_r2": r2,
             "train_mape": None,
             "val_mape": None,
-            "test_mape": mape,
+            "test_mape": test_mape,
             "optimizer": self.model.optimizer.__class__.__name__.lower(),
             "learning_rate": float(tf.keras.backend.get_value(self.model.optimizer.learning_rate)),
             "dynamic_learning_rate": None,
@@ -89,6 +93,6 @@ class HPSLoggerCallback(Callback):
             "early_stopped": False,
             "runtime_seconds": runtime,
             "hyeperparameters": str(self.param_dict)
-        }
+}
 
         log_hps_epoch(self.filename, log_data)

@@ -30,7 +30,23 @@ def clear_keras_logs():
     else:
         print(f"⚠️ Path not found: {log_dir}")
 
+def clear_log_files():
+    log_dir = "logs/"
+    if os.path.exists(log_dir):
+        for filename in os.listdir(log_dir):
+            file_path = os.path.join(log_dir, filename)
+            try:
+                if os.path.isfile(file_path):
+                    os.remove(file_path)
+            except Exception as e:
+                print(f"⚠️ Failed to delete {file_path}: {e}")
+        print(f"✅ Cleared all files from: {log_dir}")
+    else:
+        print(f"⚠️ Path not found: {log_dir}")
+
+# Clear both
 clear_keras_logs()
+clear_log_files()
 
 os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'
 warnings.filterwarnings("ignore")
@@ -44,21 +60,22 @@ def run_keras_tuner():
     def wrapped_model_builder(hp):
         optimizer = hp.Choice("optimizer", ["adam", "adagrad", "nadam"])
         learning_rate = hp.Choice("learning_rate", [0.01, 0.001, 0.0001])
-        batch_size = hp.Choice("batch_size", [4, 8, 16, ])
+        batch_size = hp.Choice("batch_size", [4, 8, 16, 32, 64, 128, 256 ])
         dropout_rate = hp.Choice("dropout_rate", [0.1, 0.2, 0.3])
-        num_layers = hp.Int("num_layers", 1, 3)
-        layer_size = hp.Choice("layer_size", [64, 128, 200])
+        num_layers = hp.Int("num_layers", 1, 5)
+        layer_size = hp.Choice("layer_size", list(range(32, 257, 16)))
+        use_early_stopping = hp.Boolean("use_early_stopping", False)
 
         layers = [layer_size] * num_layers
 
-        model, _ = build_model(
+        model, early_stopping_cb = build_model(
             layers=layers,
             time_steps=input_shape[0],
             num_features=input_shape[1],
             optimizer_name=optimizer,
             learning_rate=learning_rate,
             dropout_rate=dropout_rate,
-            use_early_stopping=False
+            use_early_stopping=use_early_stopping
         )
 
         return model
@@ -66,13 +83,13 @@ def run_keras_tuner():
     tuner = kt.BayesianOptimization(
         wrapped_model_builder,
         objective='val_mae',
-        max_trials=20,
+        max_trials=50,   ############### default value is 20 #####################
         directory='outputs/keras_tuner',
         project_name='lstm_tuning'
     )
 
     trial_id = f"trial_{int(time.time())}"
-    log_file = f"outputs/keras_tuner/{trial_id}.csv"
+    log_file = f"logs/{trial_id}.csv"
     init_hps_log(log_file)
 
     hpo_callback = HPSLoggerCallback(
@@ -84,10 +101,12 @@ def run_keras_tuner():
         y_test=y_test
     )
 
+    
+
     tuner.search(
     X_train, y_train,
     validation_data=(X_val, y_val),
-    epochs=10,
+    epochs=20,  ################DEFAULT VALUE IS 10
     callbacks=[hpo_callback]
 )
 
@@ -100,6 +119,7 @@ def run_keras_tuner():
         "optimizer": best_hps.get("optimizer"),
         "dropout_rate": best_hps.get("dropout_rate"),
         "batch_size": best_hps.get("batch_size"),
+        "use_early_stopping": best_hps.get("use_early_stopping"),
         "epochs": 20,
         "replicates": 10
     }
@@ -117,14 +137,14 @@ def run_keras_tuner():
     param_set_id = generate_param_hash(best_params)
 
     for replicate in range(best_params["replicates"]):
-        model, _ = build_model(
+        model, early_stopping_cb = build_model(
             layers=best_params["layers"],
             time_steps=best_params["time_steps"],
             num_features=input_shape[1],
             optimizer_name=best_params["optimizer"],
             learning_rate=best_params["learning_rate"],
             dropout_rate=best_params["dropout_rate"],
-            use_early_stopping=False
+            use_early_stopping=best_params["use_early_stopping"]
         )
 
         model.compile(optimizer=model.optimizer, loss="mean_squared_error", metrics=["mae"])
@@ -137,12 +157,17 @@ def run_keras_tuner():
         )
         start_time = time.time()
 
+        callbacks = [lr_callback]
+        if early_stopping_cb:
+            callbacks.append(early_stopping_cb)
+
+
         history = model.fit(
             X_train, y_train,
             validation_data=(X_val, y_val),
             batch_size=best_params["batch_size"],
             epochs=best_params["epochs"],
-            callbacks=[lr_callback],
+            callbacks=callbacks,
             verbose=0
         )
 
